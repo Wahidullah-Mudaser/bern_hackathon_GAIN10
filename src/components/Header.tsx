@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 interface HeaderProps {
-  onCreateContent?: () => void;
+  onCreateContent?: (contentType?: string) => void;
   onSearch?: (query: string) => void;
   searchQuery?: string;
 }
@@ -75,15 +75,15 @@ export const Header: React.FC<HeaderProps> = ({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={() => onCreateContent?.()}>
+              <DropdownMenuItem onClick={() => onCreateContent?.('hotel')}>
                 <span className="mr-2">🏨</span>
                 Create Hotel
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onCreateContent?.()}>
+              <DropdownMenuItem onClick={() => onCreateContent?.('tour')}>
                 <span className="mr-2">🗺️</span>
                 Create Tour
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onCreateContent?.()}>
+              <DropdownMenuItem onClick={() => onCreateContent?.('care-service')}>
                 <span className="mr-2">🏥</span>
                 Create Care Service
               </DropdownMenuItem>

@@ -4,6 +4,7 @@ import { DashboardStats } from '@/components/DashboardStats';
 import { ContentCard } from '@/components/ContentCard';
 import { ContentPreview } from '@/components/ContentPreview';
 import { FeatureHighlight } from '@/components/FeatureHighlight';
+import { CreateContentDialog } from '@/components/CreateContentDialog';
 import heroImage from '@/assets/hero-accessibility.jpg';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -74,6 +75,8 @@ export const Dashboard: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [activeTab, setActiveTab] = useState('all');
   const [isLoading, setIsLoading] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createDialogTab, setCreateDialogTab] = useState<'hotel' | 'tour' | 'care-service'>('hotel');
 
   const handleViewContent = (id: number) => {
     // Simulate API call
@@ -132,9 +135,11 @@ export const Dashboard: React.FC = () => {
     }, 800);
   };
 
-  const handleCreateContent = () => {
-    // TODO: Implement content creation modal/page
-    console.log('Create content clicked');
+  const handleCreateContent = (contentType?: string) => {
+    if (contentType && ['hotel', 'tour', 'care-service'].includes(contentType)) {
+      setCreateDialogTab(contentType as 'hotel' | 'tour' | 'care-service');
+    }
+    setCreateDialogOpen(true);
   };
 
   const filteredContent = mockContent.filter(item => {
@@ -196,7 +201,7 @@ export const Dashboard: React.FC = () => {
             
             <div className="flex items-center justify-center gap-4 pt-6">
               <Button 
-                onClick={handleCreateContent}
+                onClick={() => handleCreateContent()}
                 className="bg-white text-primary hover:bg-white/90 hover:shadow-xl transition-all duration-300 text-lg px-8 py-3"
                 size="lg"
               >
@@ -329,7 +334,7 @@ export const Dashboard: React.FC = () => {
                           }
                         </p>
                       </div>
-                      <Button onClick={handleCreateContent} className="bg-gradient-primary">
+                      <Button onClick={() => handleCreateContent()} className="bg-gradient-primary">
                         <Plus className="h-4 w-4 mr-2" />
                         Create Content
                       </Button>
@@ -341,6 +346,13 @@ export const Dashboard: React.FC = () => {
           </Tabs>
         </div>
       </main>
+
+      {/* Create Content Dialog */}
+      <CreateContentDialog
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+        defaultTab={createDialogTab}
+      />
     </div>
   );
 };
