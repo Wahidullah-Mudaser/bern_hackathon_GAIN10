@@ -16,6 +16,7 @@ const hotelSchema = z.object({
   name: z.string().min(1, "Hotel name is required"),
   location: z.string().min(1, "Location is required"),
   coordinates: z.string().optional(),
+  description: z.string().default(""),
   prices: z.array(z.object({ key: z.string(), value: z.string() })).default([]),
   accessibility_features: z.array(z.object({ key: z.string(), value: z.string() })).default([]),
   images: z.array(z.string()).default([]),
@@ -41,6 +42,7 @@ export const HotelForm: React.FC<HotelFormProps> = ({ onSubmit, isLoading }) => 
       name: "",
       location: "",
       coordinates: "",
+      description: "",
       prices: [],
       accessibility_features: [],
       images: [],
@@ -114,6 +116,16 @@ export const HotelForm: React.FC<HotelFormProps> = ({ onSubmit, isLoading }) => 
               {...register("coordinates")}
               placeholder="25.7907, -80.1300"
               className="mt-1"
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              {...register("description")}
+              placeholder="Enter a brief description of the hotel..."
+              className="mt-1 min-h-[80px]"
             />
           </div>
         </CardContent>
