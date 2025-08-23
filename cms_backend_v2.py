@@ -23,6 +23,7 @@ from openai import OpenAI
 try:
     # Try to get API key from environment first, then fallback to hardcoded
     api_key = "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"
+    api_key = "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"
     
     if api_key and api_key != 'dummy-key-for-testing':
         # Use real API key
@@ -55,6 +56,7 @@ class DisabilityType(str, Enum):
 class HotelContentModel(BaseModel):
     """Pydantic model for hotel content - used for both input and all disability versions"""
     name: str = Field(..., description="Hotel name")
+    description: str = Field(..., description="Hotel description")
     location: str = Field(..., description="Hotel location")
     coordinates: Optional[str] = Field(None, description="GPS coordinates")
     prices: Dict[str, Union[str, float, int]] = Field(default_factory=dict, description="Pricing information")
@@ -105,62 +107,158 @@ class CareServiceContentModel(BaseModel):
             datetime: lambda v: v.isoformat()
         }
 
-# AI Prompts for each disability type
+# ...existing code...
+ASSESSMENT_PROMPT = """
+You are an accessibility assessment expert.
+
+Given the following hotel content (as JSON), assess how well it is suited for each of these accessibility types:
+- wheelchair_user
+- dyslexia
+- cognitive_impairment
+- anxiety_travel_fear
+- low_vision
+
+For each type, return a score: 1 (best suited), 0 (not suitable), or any value in between (e.g., 0.5 for partially suitable).
+Base your assessment only on the facts in the JSON. Do not invent details.
+
+Return a JSON object with keys as the disability type and values as the score (float between 0 and 1).
+
+Example output:
+{
+  "wheelchair_user": 1,
+  "dyslexia": 0.5,
+  "cognitive_impairment": 0,
+  "anxiety_travel_fear": 0.8,
+  "low_vision": 1
+}
+"""
+
+
 ADAPTATION_PROMPTS = {
     DisabilityType.WHEELCHAIR_USER: """
-    Adapt this content for wheelchair users by:
-    1. Prioritize accessibility features like ramps, elevators, door widths, accessible bathrooms
-    2. Highlight mobility-related amenities and services
-    3. Emphasize accessibility information for transportation and movement
-    4. Focus on barrier-free access details
-    5. Maintain all original information but reorganize with accessibility features first
-    Return the same JSON structure with reordered and enhanced content for wheelchair accessibility.
-    """,
-    
+You are adapting content for a wheelchair user.
+
+GOAL
+- Surface mobility/access info first. Keep all numbers (e.g., door width 85 cm) unchanged.
+
+HOW TO ADAPT (without changing schema):
+1) Rewrite strings with short, clear sentences focused on: step‑free entrance, ramps, elevators (door/cabin width, controls height), room maneuvering space, accessible bathroom (roll‑in shower, grab bars), parking & paths.
+2) Put mobility details at the beginning of any paragraph field (e.g., accessibility_notes, amenities values).
+3) Reorder lists to show the most relevant items first:
+   - images: start with any image URL that clearly relates to entrance/elevator/bathroom (keep the same URLs).
+   - nearby_accessible_places: put places with step‑free access/public transport access first.
+4) Do not remove or invent items. Do not change prices or phone numbers.
+5) Tone: practical and factual.
+
+Return the SAME JSON structure as the input, with only value rewrites and list reordering.
+""",
+
     DisabilityType.DYSLEXIA: """
-    Adapt this content for people with dyslexia by:
-    1. Use simple, clear language with shorter sentences
-    2. Avoid complex words - replace with simpler alternatives
-    3. Use consistent terminology throughout
-    4. Structure information with clear headings and bullet points
-    5. Provide explanations for technical terms
-    6. Use lowercase where appropriate if specified in user preferences
-    Return the same JSON structure maintaining all information but with dyslexia-friendly language.
-    """,
-    
+You are adapting content for a person with dyslexia.
+
+GOAL
+- Make text fast and effortless to read while preserving facts.
+
+HOW TO ADAPT (without changing schema):
+1) Use lowercase for sentences and headings inside string fields.
+2) Keep sentences short (max ~10 words). Prefer bullet‑like phrases separated by periods.
+3) Replace difficult words with simple ones. Where a difficult term must stay, add a brief [simple explanation].
+4) Break long paragraphs into short lines (you can insert line breaks '\\n' inside the same string).
+5) Reorder lists by importance to booking (prices/cancellation, accessibility, rooms, transport, dining).
+6) Never change numbers, names, or URLs. Keep images list the same items; you may reorder to start with the clearest photo.
+
+Return the SAME JSON structure as the input, only changing string wording and list order.
+""",
+
     DisabilityType.COGNITIVE_IMPAIRMENT: """
-    Adapt this content for people with cognitive impairments by:
-    1. Use very simple, clear language
-    2. Break complex information into smaller, digestible chunks
-    3. Use concrete, specific details rather than abstract concepts
-    4. Provide step-by-step information where relevant
-    5. Emphasize support services and assistance available
-    6. Highlight emergency contacts and help resources prominently
-    Return the same JSON structure with simplified, concrete language and clear structure.
-    """,
-    
+You are adapting content for a person with a cognitive impairment.
+
+GOAL
+- One idea per sentence. Clear sequence. Minimal cognitive load.
+
+HOW TO ADAPT (without changing schema):
+1) Very simple language. One idea per sentence (≤ 8 words).
+2) Use guiding words inside strings: "first", "then", "next".
+3) Put the essential steps first (arrival, check‑in, room, dining, help).
+4) Reorder lists to follow the user journey order: booking/support → arrival/transport → rooms → dining → activities.
+5) Keep all numbers and names exactly the same.
+6) If a detail is not specified, write "not specified" only if that exact field already had text like that; otherwise keep existing string.
+
+Return the SAME JSON structure as the input, only changing text and list order.
+""",
+
     DisabilityType.ANXIETY_TRAVEL_FEAR: """
-    Adapt this content for people with travel anxiety by:
-    1. Emphasize safety features and security measures
-    2. Provide detailed, predictable information to reduce uncertainty
-    3. Highlight cancellation policies and flexibility options
-    4. Emphasize support services and staff availability
-    5. Include calming, reassuring language
-    6. Provide clear contact information for questions and support
-    Return the same JSON structure with reassuring, detailed information that reduces travel anxiety.
-    """,
-    
+You are adapting content for a traveler with anxiety/fear of travel.
+
+GOAL
+- Reduce uncertainty with calm, reassuring, predictable information.
+
+HOW TO ADAPT (without changing schema):
+1) Start the sentence with reassurance and predictability: free cancellation (if present), 24/7 support, staff availability, quiet options.
+2) Calm tone. Short, positive phrases: "don't worry", "help available".
+3) Provide clear directions and timing where already present; do not invent specifics.
+4) Reorder lists by anxiety relevance: booking/cancellation → support/contacts → transport predictability → rooms → dining/activities.
+5) Keep numbers, policies, and times exactly as written.
+6) Images: keep same URLs; you may reorder to show calmer scenes first (gardens/rooms vs crowded spaces).
+
+Return the SAME JSON structure as the input, only changing wording and list order.
+""",
+
     DisabilityType.LOW_VISION: """
-    Adapt this content for people with low vision by:
-    1. Emphasize audio descriptions and tactile features
-    2. Highlight high-contrast visual elements and lighting
-    3. Focus on descriptive details about layouts and navigation
-    4. Emphasize braille availability and audio guides
-    5. Provide detailed verbal descriptions of visual elements
-    6. Highlight staff assistance for visual navigation
-    Return the same JSON structure with enhanced descriptive content for low vision needs.
-    """
+You are adapting content for a person with low vision.
+
+GOAL
+- Make copy concise, scannable, and descriptive so a screen reader performs well.
+
+HOW TO ADAPT (without changing schema):
+1) Use clear headings at the start of strings (e.g., "ACCESS: ..."). Keep text concise.
+2) Summarize long paragraphs into short blocks. Put the key fact first (e.g., "Elevator door 85 cm.").
+3) Use consistent key‑value phrasing inside strings: "Entrance: step‑free." "Elevator: to all floors."
+4) Reorder lists to prioritize transport/directions, accessibility, and room layout details.
+5) Do NOT alter numbers, names, or URLs.
+6) Images: keep same URLs; if you reorder, start with the clearest, high‑contrast views (entrance, elevator, bathroom).
+
+Return the SAME JSON structure as the input, only changing text brevity and list order.
+"""
 }
+
+
+class ContentAssessmentService:
+    @staticmethod
+    def assess_accessibility_suitability(content_model: BaseModel) -> Dict[str, float]:
+        """
+        Use AI to assess which accessibility type(s) the hotel is best suited for.
+        Returns a dict of {disability_type: score}
+        """
+        try:
+            if client is None:
+                print("⚠️  OpenAI client not available, returning default scores")
+                return {dt.value: 0.0 for dt in DisabilityType}
+            
+            content_dict = content_model.model_dump()
+            content_str = json.dumps(content_dict, indent=2)
+            
+            full_prompt = f"{ASSESSMENT_PROMPT}\n\nHotel Content:\n{content_str}\n\nReturn only the JSON object."
+            
+            response = client.chat.completions.create(
+                model="openai/gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are an accessibility assessment expert. Always return valid JSON with scores for each disability type."},
+                    {"role": "user", "content": full_prompt}
+                ],
+                max_tokens=512,
+                temperature=0.0,
+                response_format={"type": "json_object"}
+            )
+            result = response.choices[0].message.content.strip()
+            if result.startswith('```json'):
+                result = result[7:]
+            if result.endswith('```'):
+                result = result[:-3]
+            return json.loads(result)
+        except Exception as e:
+            print(f"Error in accessibility assessment: {e}")
+            return {dt.value: 0.0 for dt in DisabilityType}
 
 # Database Models - storing JSON content using Pydantic models
 class Hotel(db.Model):
@@ -244,20 +342,25 @@ class ContentAdaptationService:
             Original Content:
             {content_str}
             
-            Please return only valid JSON with the adapted content using the same field structure.
-            """
+            Please return only valid JSON with the adapted content using the same field structure."""
             
             # Call OpenAI API
-        response = client.chat.completions.create(
-            model="openai/gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are an accessibility expert who adapts content for people with disabilities. Always return valid JSON with the exact same structure as input."},
-                {"role": "user", "content": full_prompt}
-            ],
-            max_tokens=4096,
-            temperature=0.3
-        )
-            
+            response = client.chat.completions.create(
+                model="openai/gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are an accessibility expert who adapts content for people with disabilities. Always return valid JSON with the exact same structure as input."},
+                    {"role": "user", "content": full_prompt}
+                ],
+                max_tokens=4096,
+                temperature=0.3,
+                response_format={
+                    "type":"json_schema",
+                    "json_schema":{
+                    "name": "output_schema",
+                    "schema": content_model.model_json_schema()
+                    }
+                }
+            )
             # Parse the response
             adapted_content = response.choices[0].message.content.strip()
             
@@ -320,6 +423,24 @@ def validate_and_create_care_service_content(data: dict) -> CareServiceContentMo
         raise ValueError(f"Invalid care service data: {str(e)}")
 
 # API Routes
+
+@app.route('/api/hotels/<int:hotel_id>/accessibility-assessment', methods=['GET'])
+def assess_hotel_accessibility(hotel_id):
+    """Assess which accessibility type(s) the hotel is best suited for"""
+    try:
+        hotel = Hotel.query.get_or_404(hotel_id)
+        content_model = HotelContentModel(**hotel.original_content)
+        scores = ContentAssessmentService.assess_accessibility_suitability(content_model)
+        return jsonify({
+            "success": True,
+            "hotel_id": hotel_id,
+            "accessibility_scores": scores
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
 # Hotel Management APIs
 @app.route('/api/hotels', methods=['POST'])
@@ -867,17 +988,6 @@ def init_db():  # pragma: no cover
 
 if __name__ == '__main__':
     with app.app_context():
-        # Force reset database to ensure correct schema
-        print("🔄 Initializing database with correct schema...")
-        
-        # Drop all existing tables
-        db.drop_all()
-        print("🗑️  Dropped existing tables")
-        
-        # Create all tables with new schema
-        db.create_all()
-        print("✅ Database initialized with new schema")
-        
         # Verify table structure
         try:
             inspector = db.inspect(db.engine)
