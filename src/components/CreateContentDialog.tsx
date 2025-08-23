@@ -83,8 +83,8 @@ export const CreateContentDialog: React.FC<CreateContentDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] p-0">
-        <DialogHeader className="px-6 py-4 border-b">
+      <DialogContent className="max-w-5xl w-[95vw] h-[90vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="px-6 py-4 border-b bg-background shrink-0">
           <DialogTitle className="text-2xl font-bold text-foreground">
             Create New Accessible Content
           </DialogTitle>
@@ -93,8 +93,8 @@ export const CreateContentDialog: React.FC<CreateContentDialogProps> = ({
           </p>
         </DialogHeader>
         
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'hotel' | 'tour' | 'care-service')} className="flex-1">
-          <div className="px-6 py-2 border-b">
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'hotel' | 'tour' | 'care-service')} className="flex flex-col flex-1 overflow-hidden">
+          <div className="px-6 py-3 border-b bg-background shrink-0">
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="hotel" className="flex items-center gap-2">
                 <Hotel className="h-4 w-4" />
@@ -111,28 +111,32 @@ export const CreateContentDialog: React.FC<CreateContentDialogProps> = ({
             </TabsList>
           </div>
 
-          <ScrollArea className="flex-1 px-6 py-6 max-h-[70vh]">
-            <TabsContent value="hotel" className="mt-0">
-              <HotelForm 
-                onSubmit={(data) => handleSubmit(data, 'hotel')}
-                isLoading={isLoading}
-              />
-            </TabsContent>
-            
-            <TabsContent value="tour" className="mt-0">
-              <TourForm 
-                onSubmit={(data) => handleSubmit(data, 'tour')}
-                isLoading={isLoading}
-              />
-            </TabsContent>
-            
-            <TabsContent value="care-service" className="mt-0">
-              <CareServiceForm 
-                onSubmit={(data) => handleSubmit(data, 'care-service')}
-                isLoading={isLoading}
-              />
-            </TabsContent>
-          </ScrollArea>
+          <div className="flex-1 overflow-hidden">
+            <ScrollArea className="h-full">
+              <div className="px-6 py-6">
+                <TabsContent value="hotel" className="mt-0">
+                  <HotelForm 
+                    onSubmit={(data) => handleSubmit(data, 'hotel')}
+                    isLoading={isLoading}
+                  />
+                </TabsContent>
+                
+                <TabsContent value="tour" className="mt-0">
+                  <TourForm 
+                    onSubmit={(data) => handleSubmit(data, 'tour')}
+                    isLoading={isLoading}
+                  />
+                </TabsContent>
+                
+                <TabsContent value="care-service" className="mt-0">
+                  <CareServiceForm 
+                    onSubmit={(data) => handleSubmit(data, 'care-service')}
+                    isLoading={isLoading}
+                  />
+                </TabsContent>
+              </div>
+            </ScrollArea>
+          </div>
         </Tabs>
       </DialogContent>
     </Dialog>

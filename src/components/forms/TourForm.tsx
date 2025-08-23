@@ -228,14 +228,27 @@ export const TourForm: React.FC<TourFormProps> = ({ onSubmit, isLoading }) => {
       </Card>
 
       {/* Submit Button */}
-      <div className="flex justify-end pt-6">
-        <Button 
-          type="submit" 
-          disabled={isLoading}
-          className="px-8 py-2 bg-gradient-primary text-white font-medium hover:shadow-lg transition-all duration-300"
-        >
-          {isLoading ? "Creating Tour..." : "Create Tour"}
-        </Button>
+      <div className="sticky bottom-0 bg-background border-t pt-6 mt-8 -mx-6 px-6 pb-6">
+        <div className="flex justify-between items-center">
+          <p className="text-sm text-muted-foreground">
+            All fields will be processed by AI to create accessible versions
+          </p>
+          <Button 
+            type="submit" 
+            disabled={isLoading}
+            className="px-8 py-3 bg-gradient-primary text-white font-medium hover:shadow-lg transition-all duration-300 min-w-[160px]"
+            size="lg"
+          >
+            {isLoading ? (
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Creating...
+              </div>
+            ) : (
+              "Create Tour"
+            )}
+          </Button>
+        </div>
       </div>
     </form>
   );
