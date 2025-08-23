@@ -22,12 +22,7 @@ from openai import OpenAI
 # Initialize OpenAI client with proper error handling
 try:
     # Try to get API key from environment first, then fallback to hardcoded
-    api_key = os.getenv('OPENAI_API_KEY')
-    
-    if not api_key:
-        # Fallback to hardcoded API key
-        api_key = "sk-or-v1-ab3df1cef88f344f15e673778151efd30a2d3e09f82221e112806bd5c0847ff87"
-        print("🔑 Using hardcoded API key from code")
+    api_key = "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"
     
     if api_key and api_key != 'dummy-key-for-testing':
         # Use real API key
@@ -253,15 +248,15 @@ class ContentAdaptationService:
             """
             
             # Call OpenAI API
-            response = client.chat.completions.create(
-                model="openai/gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You are an accessibility expert who adapts content for people with disabilities. Always return valid JSON with the exact same structure as input."},
-                    {"role": "user", "content": full_prompt}
-                ],
-                max_tokens=4096,
-                temperature=0.3
-            )
+        response = client.chat.completions.create(
+            model="openai/gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an accessibility expert who adapts content for people with disabilities. Always return valid JSON with the exact same structure as input."},
+                {"role": "user", "content": full_prompt}
+            ],
+            max_tokens=4096,
+            temperature=0.3
+        )
             
             # Parse the response
             adapted_content = response.choices[0].message.content.strip()
