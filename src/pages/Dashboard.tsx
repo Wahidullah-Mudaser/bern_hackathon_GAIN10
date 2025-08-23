@@ -75,8 +75,76 @@ export const Dashboard: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [activeTab, setActiveTab] = useState('all');
   const [isLoading, setIsLoading] = useState(false);
+  const [contentLoading, setContentLoading] = useState(true);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createDialogTab, setCreateDialogTab] = useState<'hotel' | 'tour' | 'care-service'>('hotel');
+  const [contentData, setContentData] = useState<any[]>([]);
+
+  // Fetch content data from backend
+  useEffect(() => {
+    const fetchContentData = async () => {
+      try {
+        setContentLoading(true);
+        
+        // Fetch all content types
+        const [hotelsResponse, toursResponse, careServicesResponse] = await Promise.all([
+          fetch('http://127.0.0.1:5001/api/hotels'),
+          fetch('http://127.0.0.1:5001/api/tours'),
+          fetch('http://127.0.0.1:5001/api/care-services')
+        ]);
+
+        const [hotelsData, toursData, careServicesData] = await Promise.all([
+          hotelsResponse.json(),
+          toursResponse.json(),
+          careServicesResponse.json()
+        ]);
+
+        // Transform data for display
+        const transformedData = [
+          ...(hotelsData.success ? hotelsData.hotels.map((hotel: any) => ({
+            id: hotel.id,
+            type: 'hotel' as const,
+            title: hotel.name,
+            description: hotel.location,
+            location: hotel.location,
+            createdAt: hotel.created_at,
+            updatedAt: hotel.updated_at,
+            accessibilityTypes: [] // Will be populated based on actual data
+          })) : []),
+          ...(toursData.success ? toursData.tours.map((tour: any) => ({
+            id: tour.id,
+            type: 'tour' as const,
+            title: tour.name,
+            description: tour.description,
+            location: '', // Tours might not have location
+            createdAt: tour.created_at,
+            updatedAt: tour.updated_at,
+            accessibilityTypes: []
+          })) : []),
+          ...(careServicesData.success ? careServicesData.care_services.map((service: any) => ({
+            id: service.id,
+            type: 'care-service' as const,
+            title: service.name,
+            description: service.description,
+            location: '', // Services might not have location
+            createdAt: service.created_at,
+            updatedAt: service.updated_at,
+            accessibilityTypes: []
+          })) : [])
+        ];
+
+        setContentData(transformedData);
+      } catch (error) {
+        console.error('Error fetching content data:', error);
+        // Fallback to mock data if API fails
+        setContentData(mockContent);
+      } finally {
+        setContentLoading(false);
+      }
+    };
+
+    fetchContentData();
+  }, []);
 
   const handleViewContent = (id: number) => {
     // Simulate API call
@@ -142,7 +210,7 @@ export const Dashboard: React.FC = () => {
     setCreateDialogOpen(true);
   };
 
-  const filteredContent = mockContent.filter(item => {
+  const filteredContent = contentData.filter(item => {
     const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          item.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          item.location.toLowerCase().includes(searchQuery.toLowerCase());
@@ -269,10 +337,10 @@ export const Dashboard: React.FC = () => {
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <div className="flex items-center justify-between">
               <TabsList>
-                <TabsTrigger value="all">All Content ({mockContent.length})</TabsTrigger>
-                <TabsTrigger value="hotel">Hotels ({mockContent.filter(c => c.type === 'hotel').length})</TabsTrigger>
-                <TabsTrigger value="tour">Tours ({mockContent.filter(c => c.type === 'tour').length})</TabsTrigger>
-                <TabsTrigger value="care-service">Care Services ({mockContent.filter(c => c.type === 'care-service').length})</TabsTrigger>
+                <TabsTrigger value="all">All Content ({contentData.length})</TabsTrigger>
+                <TabsTrigger value="hotel">Hotels ({contentData.filter(c => c.type === 'hotel').length})</TabsTrigger>
+                <TabsTrigger value="tour">Tours ({contentData.filter(c => c.type === 'tour').length})</TabsTrigger>
+                <TabsTrigger value="care-service">Care Services ({contentData.filter(c => c.type === 'care-service').length})</TabsTrigger>
               </TabsList>
               
               <div className="flex items-center gap-2">
