@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatbot Widget</title>
+    <link href="./css/styles.css" rel="stylesheet">
+    <script src="https://aka.ms/csspeech/jsbrowserpackageraw"></script>
+    <script src="./js/chat.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+        }
+        
+        .chatbot-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 400px;
+            height: 500px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            z-index: 1000;
+        }
+        
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .chat-body {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            background: #f8f9fa;
+        }
+        
+        .chat-footer {
+            padding: 15px;
+            border-top: 1px solid #e0e0e0;
+            background: white;
+        }
+        
+        .message {
+            margin: 8px 0;
+            padding: 10px 15px;
+            border-radius: 18px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+        
+        .user-message {
+            background: #007bff;
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 5px;
+        }
+        
+        .bot-message {
+            background: #e9ecef;
+            color: #333;
+            margin-right: auto;
+            border-bottom-left-radius: 5px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        
+        .error {
+            color: #dc3545;
+            text-align: center;
+            padding: 10px;
+        }
+        
+        #videoContainer {
+            width: 100%;
+            height: 200px;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+        
+        #remoteVideo video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="chatbot-container">
+        <div class="chat-header">
+            <h3 style="margin: 0;">Accessibility Assistant</h3>
+        </div>
+        
+        <div class="chat-body" id="chatBody">
+            <div class="loading" id="loading">
+                <p>Starting chatbot session...</p>
+            </div>
+            
+            <div id="videoContainer" style="display: none;">
+                <div id="remoteVideo"></div>
+            </div>
+            
+            <div id="chatMessages"></div>
+        </div>
+        
+        <div class="chat-footer" style="display: none;" id="chatFooter">
+            <div class="controls">
+                <button id="microphone" class="btn-primary" onclick="window.microphone()">🎤 Start Mic</button>
+                <button id="stopSpeaking" class="btn-secondary" onclick="stopSpeaking()" disabled>⏹️ Stop</button>
+                <button id="stopSession" class="btn-danger" onclick="window.stopSession()">❌ Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // Configuration values (pre-filled from the original chat.html)
+    const config = {
+        region: 'westeurope',
+        APIKey: '9l3CmXiyadFyKHGXz1aWji76DwiBU2472pHP1Wo8JQvgm7UsdwMCJQQJ99BHAC5RqLJXJ3w3AAAYACOGB8xB',
+        azureOpenAIEndpoint: 'https://psiopenai1.openai.azure.com/',
+        azureOpenAIApiKey: 'BGJdTRVRg4C6Ij3fNpSM86neFtAuyNhqYmpBzhQlCR8PkkO4U4NBJQQJ99BHAC5RqLJXJ3w3AAABACOGF0f3',
+        azureOpenAIDeploymentName: 'gpt-4o',
+        prompt: `You must ask the user the following question in a clear and strict manner and wait for their response:
+
+"Do you have any disability, medical condition, or special requirement that should be noted? If yes, clearly specify the type of disability or condition and include any important details or considerations."
+
+Rules for handling responses:
+
+If the user says "No", acknowledge with "Okay, noted." and do not ask again.
+
+If the user mentions wheelchair or mobility issues, respond with: "Okay, I understand you have an issue related to wheelchair use." Do not provide additional details.
+
+If the user mentions blindness or vision impairment, then:
+
+You must read/explain website content only when the user asks a specific query.
+
+Keep answers short, precise, and limited strictly to the user's query.
+
+Do not add extra information beyond what is asked.
+
+For any other disability/condition, just acknowledge with: "Okay, I understand."`,
+        sttLocales: 'en-US,de-DE,es-ES,fr-FR,it-IT,ja-JP,ko-KR,zh-CN',
+        ttsVoice: 'en-US-AvaMultilingualNeural',
+        talkingAvatarCharacter: 'lisa',
+        talkingAvatarStyle: 'casual-sitting'
+    };
+
+    // Set configuration values
+    window.onload = function() {
+        // Set all configuration values
+        document.getElementById('region').value = config.region;
+        document.getElementById('APIKey').value = config.APIKey;
+        document.getElementById('azureOpenAIEndpoint').value = config.azureOpenAIEndpoint;
+        document.getElementById('azureOpenAIApiKey').value = config.azureOpenAIApiKey;
+        document.getElementById('azureOpenAIDeploymentName').value = config.azureOpenAIDeploymentName;
+        document.getElementById('prompt').value = config.prompt;
+        document.getElementById('sttLocales').value = config.sttLocales;
+        document.getElementById('ttsVoice').value = config.ttsVoice;
+        document.getElementById('talkingAvatarCharacter').value = config.talkingAvatarCharacter;
+        document.getElementById('talkingAvatarStyle').value = config.talkingAvatarStyle;
+
+        // Start session after a short delay
+        setTimeout(() => {
+            window.autoStartSession();
+        }, 1000);
+    };
+
+    // Modified auto start session function
+    window.autoStartSession = function() {
+        console.log("Auto-starting avatar session in widget mode...");
+        
+        try {
+            userClosedSession = false;
+            
+            // Override the connectAvatar function to handle widget-specific UI
+            const originalConnectAvatar = connectAvatar;
+            connectAvatar = function() {
+                // Hide loading and show video
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('videoContainer').style.display = 'block';
+                document.getElementById('chatFooter').style.display = 'block';
+                
+                // Call original function
+                return originalConnectAvatar.apply(this, arguments);
+            };
+            
+            // Start the session
+            connectAvatar();
+            
+        } catch (error) {
+            console.error("Failed to auto-start session:", error);
+            document.getElementById('loading').innerHTML = 
+                '<div class="error">Failed to start session. Please refresh the page.</div>';
+        }
+    };
+
+    // Override handleUserQuery to show messages in the widget
+    const originalHandleUserQuery = handleUserQuery;
+    handleUserQuery = function(userQuery, userQueryHTML, imgUrlPath) {
+        // Add user message to chat
+        addMessage(userQuery, 'user');
+        
+        // Call original function
+        return originalHandleUserQuery.apply(this, arguments);
+    };
+
+    // Override speak function to show bot messages
+    const originalSpeak = speak;
+    speak = function(text, endingSilenceMs = 0) {
+        // Add bot message to chat
+        addMessage(text, 'bot');
+        
+        // Call original function
+        return originalSpeak.apply(this, arguments);
+    };
+
+    // Helper function to add messages to the chat
+    function addMessage(text, type) {
+        const messagesDiv = document.getElementById('chatMessages');
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${type}-message`;
+        messageDiv.textContent = text;
+        messagesDiv.appendChild(messageDiv);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    // Modified stop session for widget
+    const originalStopSession = window.stopSession;
+    window.stopSession = function() {
+        originalStopSession();
+        document.getElementById('videoContainer').style.display = 'none';
+        document.getElementById('chatFooter').style.display = 'none';
+        document.getElementById('loading').style.display = 'block';
+        document.getElementById('loading').innerHTML = 
+            '<p>Session ended. Refresh to start again.</p>';
+    };
+    </script>
+</body>
+</html>

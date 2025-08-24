@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bottom‑Right Chatbot Widget (Auto‑Open)</title>
+  <style>
+    :root {
+      --bot-accent: #6d5dfc;
+      --bot-bg: #101114;
+      --bot-panel: #16181d;
+      --bot-text: #f7f7fb;
+      --bot-muted: #a9b0bd;
+      --bot-border: #23262d;
+      --bot-user: #2a2f36;
+    }
+  </style>
+</head>
+<body>
+  <!-- Drop this custom element anywhere on your page. It auto-opens on load. -->
+  <chat-bot open-on-load bot-title="Assistant" placeholder="Type a message…" />
+
+  <script>
+    /**
+     * <chat-bot>
+     * A modern, self-contained chatbot widget that docks to the bottom-right
+     * and auto-opens on page load. No external CSS/JS required.
+     *
+     * Integration:
+     *  - Replace echoReply() with your real backend call (e.g., fetch to your API).
+     *  - Optional attributes:
+     *      bot-title        : Header title (default: "Assistant")
+     *      placeholder      : Input placeholder
+     *      open-on-load     : If present, panel auto-opens
+     *      storage-key      : Custom key to persist chat (default: chat-bot-history)
+     */
+    class ChatBotWidget extends HTMLElement {
+      constructor() {
+        super();
+        this.attachShadow({ mode: 'open' });
+        const title = this.getAttribute('bot-title') || 'Assistant';
+        const placeholder = this.getAttribute('placeholder') || 'Type a message…';
+        const storageKey = this.getAttribute('storage-key') || 'chat-bot-history';
+
+        this.storageKey = storageKey;
+
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = `
+          <style>
+            *, *::before, *::after { box-sizing: border-box; }
+
+            .host { position: fixed; right: 20px; bottom: 20px; z-index: 9999; }
+
+            .fab { 
+              width: 56px; height: 56px; border-radius: 50%;
+              display: grid; place-items: center; cursor: pointer;
+              background: var(--bot-accent); color: white; border: none;
+              box-shadow: 0 10px 30px rgba(0,0,0,.35); transition: transform .2s ease;
+            }
+            .fab:active { transform: scale(.96); }
+            .fab svg { width: 28px; height: 28px; }
+
+            .panel {
+              position: absolute; right: 0; bottom: 72px; width: 340px; max-height: 70vh;
+              background: var(--bot-panel); color: var(--bot-text);
+              border: 1px solid var(--bot-border); border-radius: 16px;
+              box-shadow: 0 20px 60px rgba(0,0,0,.45);
+              display: grid; grid-template-rows: auto 1fr auto; overflow: hidden;
+              transform-origin: 100% 100%;
+              transform: scale(.96) translateY(8px); opacity: 0; pointer-events: none;
+              transition: transform .22s cubic-bezier(.2,.8,.2,1), opacity .18s ease;
+            }
+            .panel.open { transform: scale(1) translateY(0); opacity: 1; pointer-events: auto; }
+
+            header { display:flex; align-items:center; gap:.5rem; padding: 12px 14px; background: var(--bot-bg); border-bottom: 1px solid var(--bot-border); }
+            header .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, var(--bot-accent), #9a7dff); display:grid; place-items:center; font-weight:700; }
+            header h3 { margin: 0; font-size: 14px; letter-spacing:.2px; }
+            header .actions { margin-left: auto; display:flex; gap:6px; }
+            header button { background: transparent; border: none; color: var(--bot-muted); cursor: pointer; padding:6px; border-radius: 8px; }
+            header button:hover { background: rgba(255,255,255,.05); color: var(--bot-text); }
+
+            .messages { padding: 14px; overflow: auto; display:grid; gap: 10px; background: linear-gradient(180deg, #121317, #0f1115); }
+            .msg { display: grid; gap: 4px; max-width: 86%; }
+            .msg.bot { justify-self: start; }
+            .msg.user { justify-self: end; }
+
+            .bubble { padding: 10px 12px; border-radius: 14px; font-size: 14px; line-height: 1.3; word-wrap: break-word; white-space: pre-wrap; }
+            .bot .bubble { background: #1a1d24; border: 1px solid var(--bot-border); }
+            .user .bubble { background: var(--bot-user); border: 1px solid var(--bot-border); }
+            .meta { font-size: 11px; color: var(--bot-muted); }
+
+            .composer { display:flex; align-items:center; gap: 8px; padding: 12px; background: var(--bot-bg); border-top: 1px solid var(--bot-border); }
+            .input { flex:1; min-height: 38px; max-height: 120px; overflow:auto; outline:none; border: 1px solid var(--bot-border); border-radius: 12px; padding: 9px 12px; background: #0e1014; color: var(--bot-text); }
+            .send { background: var(--bot-accent); border: none; color: white; border-radius: 12px; padding: 10px 12px; cursor: pointer; font-weight: 600; }
+            .send:disabled { opacity: .6; cursor: not-allowed; }
+
+            .notice { text-align:center; font-size: 11px; color: var(--bot-muted); padding: 8px 12px; }
+
+            /* Small screens */
+            @media (max-width: 480px) {
+              .panel { width: calc(100vw - 24px); right: 12px; }
+            }
+          </style>
+
+          <div class="host" part="host">
+            <button class="fab" aria-label="Open chat">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M2 12a10 10 0 1 1 18.25 5.31l1.58 3.16a1 1 0 0 1-1.34 1.34l-3.16-1.58A10 10 0 0 1 2 12zm10-5a1 1 0 0 0-1 1v3H8a1 1 0 1 0 0 2h3v3a1 1 0 1 0 2 0v-3h3a1 1 0 1 0 0-2h-3V8a1 1 0 0 0-1-1z"/>
+              </svg>
+            </button>
+
+            <section class="panel" role="dialog" aria-label="${title}" aria-modal="false">
+              <header>
+                <div class="avatar" aria-hidden="true">AI</div>
+                <h3>${title}</h3>
+                <div class="actions">
+                  <button class="min" title="Minimize" aria-label="Minimize">—</button>
+                  <button class="close" title="Close" aria-label="Close">✕</button>
+                </div>
+              </header>
+
+              <div class="messages" part="messages" aria-live="polite"></div>
+
+              <div class="notice">Shift+Enter for new line • Enter to send</div>
+
+              <div class="composer">
+                <div class="input" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="${placeholder}"></div>
+                <button class="send" disabled>Send</button>
+              </div>
+            </section>
+          </div>
+        `;
+
+        // Shadow DOM root
+        this.shadowRoot.appendChild(wrapper);
+
+        // Elements
+        this.$ = (sel) => this.shadowRoot.querySelector(sel);
+        this.hostEl   = this.$('.host');
+        this.fab      = this.$('.fab');
+        this.panel    = this.$('.panel');
+        this.msgs     = this.$('.messages');
+        this.input    = this.$('.input');
+        this.sendBtn  = this.$('.send');
+        this.btnMin   = this.$('.min');
+        this.btnClose = this.$('.close');
+
+        // Input placeholder behavior
+        const setPh = () => {
+          this.input.dataset.placeholder = this.input.textContent.trim() ? '' : (this.getAttribute('placeholder') || 'Type a message…');
+        };
+        const inputObserver = new MutationObserver(setPh);
+        inputObserver.observe(this.input, { childList: true, characterData: true, subtree: true });
+
+        // Restore history
+        this.history = this.loadHistory();
+        this.history.forEach(m => this.renderMsg(m.role, m.text, m.time));
+
+        // Initial greeting if empty
+        if (this.history.length === 0) {
+          this.botSay("Hi! I'm your assistant. How can I help today?");
+        }
+
+        // Event handlers
+        this.fab.addEventListener('click', () => this.open());
+        this.btnMin.addEventListener('click', () => this.minimize());
+        this.btnClose.addEventListener('click', () => this.close());
+        this.sendBtn.addEventListener('click', () => this.send());
+        this.input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            this.send();
+          }
+        });
+        this.input.addEventListener('input', () => {
+          const hasText = this.input.textContent.trim().length > 0;
+          this.sendBtn.disabled = !hasText;
+        });
+
+        // Accessibility: close on ESC
+        this.shadowRoot.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') this.minimize();
+        });
+
+        // Auto-open
+        if (this.hasAttribute('open-on-load')) {
+          window.addEventListener('load', () => setTimeout(() => this.open(), 300));
+        }
+      }
+
+      open() {
+        this.panel.classList.add('open');
+        this.input.focus();
+      }
+
+      minimize() {
+        this.panel.classList.remove('open');
+      }
+
+      close() {
+        this.minimize();
+      }
+
+      renderMsg(role, text, time = Date.now()) {
+        const item = document.createElement('div');
+        item.className = `msg ${role}`;
+        const bubble = document.createElement('div');
+        bubble.className = 'bubble';
+        bubble.textContent = text;
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+        meta.textContent = new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        item.appendChild(bubble);
+        item.appendChild(meta);
+        this.msgs.appendChild(item);
+        // Scroll to bottom
+        this.msgs.scrollTop = this.msgs.scrollHeight;
+        return time;
+      }
+
+      persist(role, text, time) {
+        const arr = this.loadHistory();
+        arr.push({ role, text, time });
+        localStorage.setItem(this.storageKey, JSON.stringify(arr).slice(0, 100000));
+      }
+
+      loadHistory() {
+        try {
+          return JSON.parse(localStorage.getItem(this.storageKey)) || [];
+        } catch { return []; }
+      }
+
+      clearHistory() {
+        localStorage.removeItem(this.storageKey);
+      }
+
+      send() {
+        const text = this.input.textContent.trim();
+        if (!text) return;
+        this.input.textContent = '';
+        this.sendBtn.disabled = true;
+        const t = this.renderMsg('user', text);
+        this.persist('user', text, t);
+        this.fakeTyping().then(() => this.echoReply(text));
+      }
+
+      async fakeTyping() {
+        const phantom = document.createElement('div');
+        phantom.className = 'msg bot';
+        phantom.innerHTML = `<div class="bubble" aria-live="polite">Typing…</div><div class="meta">&nbsp;</div>`;
+        this.msgs.appendChild(phantom);
+        this.msgs.scrollTop = this.msgs.scrollHeight;
+        await new Promise(r => setTimeout(r, 600 + Math.random() * 600));
+        phantom.remove();
+      }
+
+      async echoReply(userText) {
+        // TODO: Replace this with a real API call.
+        // Example:
+        // const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: userText }) });
+        // const data = await res.json();
+        // const answer = data.reply;
+        const answer = `You said: "${userText}"`;
+        this.botSay(answer);
+      }
+
+      botSay(text) {
+        const t = this.renderMsg('bot', text);
+        this.persist('bot', text, t);
+      }
+    }
+
+    customElements.define('chat-bot', ChatBotWidget);
+  </script>
+
+  <script>
+    // Minor enhancement: contenteditable placeholder support
+    const style = document.createElement('style');
+    style.textContent = `
+      .input:empty:before { content: attr(data-placeholder); color: var(--bot-muted); }
+    `;
+    document.head.appendChild(style);
+  </script>
+</body>
+</html>

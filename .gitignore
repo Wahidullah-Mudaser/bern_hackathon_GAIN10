@@ -26,3 +26,4 @@ dist-ssr
 *.sln
 *.sw?
 instance/accessible_cms.db
+main_frontend/node_modules/*
