@@ -146,10 +146,47 @@ export const Dashboard: React.FC = () => {
     fetchContentData();
   }, []);
 
-  const handleViewContent = (id: number) => {
-    // Simulate API call
+  const handleViewContent = async (id: number) => {
     setIsLoading(true);
-    setTimeout(() => {
+    try {
+      // Find the content item to determine its type
+      const contentItem = contentData.find(item => item.id === id);
+      if (!contentItem) {
+        console.error('Content item not found');
+        return;
+      }
+
+      // Fetch detailed content from backend based on type
+      let response;
+      if (contentItem.type === 'hotel') {
+        response = await fetch(`http://127.0.0.1:5001/api/hotels/${id}`);
+      } else if (contentItem.type === 'tour') {
+        response = await fetch(`http://127.0.0.1:5001/api/tours/${id}`);
+      } else if (contentItem.type === 'care-service') {
+        response = await fetch(`http://127.0.0.1:5001/api/care-services/${id}`);
+      } else {
+        console.error('Unknown content type');
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch ${contentItem.type} data`);
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setSelectedContent({
+          ...data[contentItem.type === 'hotel' ? 'hotel' : contentItem.type === 'tour' ? 'tour' : 'service'],
+          id: id,
+          type: contentItem.type
+        });
+      } else {
+        throw new Error(data.error || 'Failed to fetch content');
+      }
+    } catch (error) {
+      console.error('Error fetching content:', error);
+      // Fallback to mock data if API fails
       const content = mockContent.find(item => item.id === id);
       if (content) {
         // Mock detailed content based on type
@@ -199,8 +236,9 @@ export const Dashboard: React.FC = () => {
           type: content.type
         });
       }
+    } finally {
       setIsLoading(false);
-    }, 800);
+    }
   };
 
   const handleCreateContent = (contentType?: string) => {
@@ -230,9 +268,39 @@ export const Dashboard: React.FC = () => {
           onBack={() => setSelectedContent(null)}
           onEdit={() => console.log('Edit content')}
           onRegenerateContent={async (disabilityType) => {
-            console.log('Regenerate content for:', disabilityType);
-            // Simulate API call
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            try {
+              console.log('Regenerate content for:', disabilityType);
+              
+              // Call the backend API to regenerate content
+              const response = await fetch(`http://127.0.0.1:5001/api/regenerate-content/${selectedContent.type}/${selectedContent.id}`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  disability_type: disabilityType
+                })
+              });
+
+              if (!response.ok) {
+                throw new Error('Failed to regenerate content');
+              }
+
+              const data = await response.json();
+              
+              if (data.success) {
+                // Update the selected content with the new adaptive content
+                setSelectedContent(prev => ({
+                  ...prev,
+                  ...data.content
+                }));
+              } else {
+                throw new Error(data.error || 'Failed to regenerate content');
+              }
+            } catch (error) {
+              console.error('Error regenerating content:', error);
+              // You might want to show a toast notification here
+            }
           }}
         />
       </div>
